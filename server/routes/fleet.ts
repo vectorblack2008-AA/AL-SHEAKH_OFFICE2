@@ -124,12 +124,16 @@ fleetRouter.get(
       [...params, pageSize, offset],
     )
 
-    const totals = await q<{ total: string; available: string; maintenance: string; operating: string; revenue: string; expenses: string }>(
+    const totals = await q<{ total: string; available: string; maintenance: string; operating: string; revenue: string; expenses: string; expiring: string }>(
       `SELECT
         COUNT(*) FILTER (WHERE archived_at IS NULL) AS total,
         COUNT(*) FILTER (WHERE archived_at IS NULL AND status = 'available') AS available,
         COUNT(*) FILTER (WHERE archived_at IS NULL AND status = 'under_maintenance') AS maintenance,
         COUNT(*) FILTER (WHERE archived_at IS NULL AND status IN ('scheduled','on_trip')) AS operating,
+        COUNT(*) FILTER (WHERE archived_at IS NULL AND (
+          (registration_expiry IS NOT NULL AND registration_expiry <= CURRENT_DATE + INTERVAL '30 days')
+          OR (insurance_expiry IS NOT NULL AND insurance_expiry <= CURRENT_DATE + INTERVAL '30 days')
+        )) AS expiring,
         (SELECT COALESCE(SUM(recognized_revenue),0) FROM trips WHERE status = 'completed' AND scheduled_departure::date BETWEEN $1::date AND $2::date) AS revenue,
         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE status = 'posted' AND is_operating = true AND expense_date BETWEEN $1::date AND $2::date) AS expenses
        FROM vehicles`,
@@ -162,6 +166,7 @@ fleetRouter.get(
           operating: Number(totals[0]?.operating ?? 0),
           revenue: Number(totals[0]?.revenue ?? 0),
           expenses: Number(totals[0]?.expenses ?? 0),
+          expiring: Number(totals[0]?.expiring ?? 0),
           utilization,
         },
         range: { from, to },
@@ -305,7 +310,37 @@ fleetRouter.get(
        WHERE ($1::date IS NOT NULL AND $2::date IS NOT NULL) AND ${filters.join(' AND ')}`,
       params,
     )
-    res.json(serialize({ data: rows, total: Number(count[0]?.count ?? 0), page, pageSize, canViewSalary, range: { from, to } }))
+    const summaryRows = await q<{ active: string; on_leave: string; expiring: string }>(
+      `SELECT
+        COUNT(*) FILTER (WHERE d.status = 'active') AS active,
+        COUNT(*) FILTER (WHERE d.status = 'on_leave') AS on_leave,
+        COUNT(*) FILTER (WHERE d.license_expiry IS NOT NULL AND d.license_expiry <= CURRENT_DATE + INTERVAL '45 days') AS expiring
+       FROM drivers d WHERE d.archived_at IS NULL`,
+    )
+    const tripTotals = await q<{ trips: string; revenue: string }>(
+      `SELECT
+        COUNT(*) FILTER (WHERE status = 'completed') AS trips,
+        COALESCE(SUM(recognized_revenue) FILTER (WHERE status = 'completed'),0) AS revenue
+       FROM trips WHERE scheduled_departure::date BETWEEN $1::date AND $2::date AND driver_id IS NOT NULL`,
+      [from, to],
+    )
+    res.json(
+      serialize({
+        data: rows,
+        total: Number(count[0]?.count ?? 0),
+        page,
+        pageSize,
+        canViewSalary,
+        range: { from, to },
+        summary: {
+          active: Number(summaryRows[0]?.active ?? 0),
+          onLeave: Number(summaryRows[0]?.on_leave ?? 0),
+          expiring: Number(summaryRows[0]?.expiring ?? 0),
+          trips: Number(tripTotals[0]?.trips ?? 0),
+          revenue: Number(tripTotals[0]?.revenue ?? 0),
+        },
+      }),
+    )
   }),
 )
 

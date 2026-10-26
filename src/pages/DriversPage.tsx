@@ -37,6 +37,13 @@ interface DriversResponse {
   pageSize: number
   canViewSalary: boolean
   range: DateRange
+  summary: {
+    active: number
+    onLeave: number
+    expiring: number
+    trips: number
+    revenue: number
+  }
 }
 
 const DRIVER_STATUSES = ['active', 'on_leave', 'inactive'] as const
@@ -121,17 +128,7 @@ export function DriversPage() {
   const canViewSalary = listQuery.data?.canViewSalary ?? can('view_driver_compensation')
   const detail = useMemo(() => rows.find((row) => row.id === detailId) ?? null, [rows, detailId])
 
-  const stats = useMemo(() => {
-    const active = rows.filter((row) => row.status === 'active').length
-    const onLeave = rows.filter((row) => row.status === 'on_leave').length
-    const expiring = rows.filter((row) => {
-      const days = relativeDays(row.license_expiry)
-      return days !== null && days <= 45
-    }).length
-    const trips = rows.reduce((total, row) => total + num(row.trips), 0)
-    const revenue = rows.reduce((total, row) => total + num(row.revenue), 0)
-    return { active, onLeave, expiring, trips, revenue }
-  }, [rows])
+  const stats = listQuery.data?.summary ?? { active: 0, onLeave: 0, expiring: 0, trips: 0, revenue: 0 }
 
   const saveMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
@@ -338,7 +335,7 @@ export function DriversPage() {
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('drivers.fullName')} required><Input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></Field>
-          <Field label={t('drivers.phone')}><Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+966 5x xxx xxxx" /></Field>
+          <Field label={t('drivers.phone')}><Input type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="+20 1x xxxx xxxx" /></Field>
           <Field label={t('drivers.email')}><Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
           <Field label={t('drivers.licenseNo')} required><Input value={form.license_no} onChange={(event) => setForm({ ...form, license_no: event.target.value })} /></Field>
           <Field label={t('drivers.licenseExpiry')}><Input type="date" value={form.license_expiry} onChange={(event) => setForm({ ...form, license_expiry: event.target.value })} /></Field>

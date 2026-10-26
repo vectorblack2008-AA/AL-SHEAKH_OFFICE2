@@ -116,7 +116,7 @@ export function MaintenancePage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<MaintenanceRecord | null>(null)
   const [form, setForm] = useState<MaintenanceForm>(emptyForm)
-  const [detail, setDetail] = useState<MaintenanceRecord | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
   const [transition, setTransition] = useState<{ record: MaintenanceRecord; status: string } | null>(null)
 
   const listQuery = useQuery({
@@ -136,6 +136,7 @@ export function MaintenancePage() {
   })
 
   const records = listQuery.data?.data ?? []
+  const detail = useMemo(() => records.find((record) => record.id === detailId) ?? null, [records, detailId])
   const vehicles = vehiclesQuery.data?.data ?? []
   const summary = listQuery.data?.summary
   const canManage = can('manage_maintenance')
@@ -160,7 +161,7 @@ export function MaintenancePage() {
       setEditing(null)
       setForm(emptyForm())
       void queryClient.invalidateQueries({ queryKey: ['maintenance'] })
-      void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      void queryClient.invalidateQueries({ queryKey: ['fleet'] })
       void queryClient.invalidateQueries({ queryKey: ['dispatch'] })
       void queryClient.invalidateQueries({ queryKey: ['expenses'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -175,9 +176,8 @@ export function MaintenancePage() {
     onSuccess: (record) => {
       toast.success(t('common.saved'), record.expense_no ? `${t('maintenance.linkedExpense')}: ${record.expense_no}` : undefined)
       setTransition(null)
-      setDetail((current) => (current && current.id === record.id ? { ...current, ...record } : current))
       void queryClient.invalidateQueries({ queryKey: ['maintenance'] })
-      void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      void queryClient.invalidateQueries({ queryKey: ['fleet'] })
       void queryClient.invalidateQueries({ queryKey: ['dispatch'] })
       void queryClient.invalidateQueries({ queryKey: ['schedule'] })
       void queryClient.invalidateQueries({ queryKey: ['expenses'] })
@@ -323,7 +323,7 @@ export function MaintenancePage() {
                 {filtered.map((record) => (
                   <tr key={record.id}>
                     <td>
-                      <button type="button" className="block max-w-[18rem] text-start" onClick={() => setDetail(record)}>
+                      <button type="button" className="block max-w-[18rem] text-start" onClick={() => setDetailId(record.id)}>
                         <span className="block text-[0.74rem] font-semibold text-text">{record.record_no}</span>
                         <span className="mt-0.5 block truncate text-[0.64rem] text-muted">{t(TYPE_LABELS[record.maintenance_type] ?? 'maintenance.type')} · {record.description}</span>
                       </button>
@@ -358,7 +358,7 @@ export function MaintenancePage() {
                         {canManage && ['scheduled', 'in_progress'].includes(record.status) ? (
                           <IconButton label={t('maintenance.cancelled')} size="sm" variant="danger" onClick={() => setTransition({ record, status: 'cancelled' })}><XCircle size={13} /></IconButton>
                         ) : null}
-                        <IconButton label={t('common.view')} size="sm" onClick={() => setDetail(record)}><Search size={13} /></IconButton>
+                        <IconButton label={t('common.view')} size="sm" onClick={() => setDetailId(record.id)}><Search size={13} /></IconButton>
                         {canManage ? <IconButton label={t('common.edit')} size="sm" onClick={() => openEdit(record)}><Pencil size={13} /></IconButton> : null}
                       </div>
                     </td>
@@ -435,7 +435,7 @@ export function MaintenancePage() {
       {/* Maintenance detail */}
       <Sheet
         open={Boolean(detail)}
-        onClose={() => setDetail(null)}
+        onClose={() => setDetailId(null)}
         title={detail ? detail.record_no : undefined}
         description={detail ? `${detail.vehicle_plate} · ${detail.make} ${detail.model}` : undefined}
         footer={
@@ -450,7 +450,7 @@ export function MaintenancePage() {
               {['scheduled', 'in_progress'].includes(detail.status) ? (
                 <Button variant="danger" size="sm" icon={<XCircle size={13} />} onClick={() => setTransition({ record: detail, status: 'cancelled' })}>{t('maintenance.cancelled')}</Button>
               ) : null}
-              <Button variant="ghost" size="sm" icon={<Pencil size={13} />} onClick={() => { openEdit(detail); setDetail(null) }}>{t('common.edit')}</Button>
+              <Button variant="ghost" size="sm" icon={<Pencil size={13} />} onClick={() => { openEdit(detail); setDetailId(null) }}>{t('common.edit')}</Button>
             </>
           ) : undefined
         }

@@ -25,7 +25,7 @@ import type {
   FixedRoute,
   Vehicle,
 } from '../lib/types'
-import { formatDate, money, num, percent, todayISO, addDaysISO, monthStartISO } from '../lib/utils'
+import { formatDate, money, num, percent, todayISO, addDaysISO, monthStartISO, relativeDays } from '../lib/utils'
 import {
   Badge,
   Button,
@@ -214,6 +214,7 @@ export function ContractsPage() {
   const vehicles = vehiclesQuery.data?.data ?? []
   const routes = routesQuery.data?.data ?? []
   const detail = detailQuery.data
+  const detailDays = relativeDays(detail?.contract.end_date)
 
   const allocationTotal = useMemo(
     () => form.vehicle_ids.reduce((total, id) => total + num(form.allocations[id]), 0),
@@ -634,7 +635,7 @@ export function ContractsPage() {
           detail ? (
             <>
               {canManage ? (
-                <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={() => { const contract = detail.contract as unknown as Contract; setDetailId(null); openEdit(contract) }}>{t('common.edit')}</Button>
+                <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={() => { const contract = detail.contract; setDetailId(null); openEdit({ ...contract, vehicles: detail.vehicles, routes: detail.routes }) }}>{t('common.edit')}</Button>
               ) : null}
               {canManage ? (
                 <Button variant="secondary" size="sm" icon={<BadgeCheck size={13} />} loading={recognizeMutation.isPending} onClick={() => recognizeMutation.mutate(detail.contract.id)}>
@@ -642,7 +643,7 @@ export function ContractsPage() {
                 </Button>
               ) : null}
               {canFinance && detail.contract.status === 'active' ? (
-                <Button variant="primary" size="sm" icon={<Receipt size={13} />} onClick={() => openInvoice(detail.contract as unknown as Contract)}>
+                <Button variant="primary" size="sm" icon={<Receipt size={13} />} onClick={() => openInvoice({ ...detail.contract, recognized: detail.financials.recognized })}>
                   {t('contracts.generateInvoice')}
                 </Button>
               ) : null}
@@ -663,8 +664,8 @@ export function ContractsPage() {
               <StatusBadge status={detail.contract.status} />
               <Badge tone="accent">{t(TYPE_LABELS[detail.contract.contract_type] ?? 'contracts.monthly')}</Badge>
               <Badge tone="neutral">{formatDate(detail.contract.start_date, language)} — {formatDate(detail.contract.end_date, language)}</Badge>
-              {num(detail.contract.days_to_expiry) <= 60 && num(detail.contract.days_to_expiry) >= 0 ? (
-                <Badge tone="warning" dot>{t('contracts.expiryNotice', { n: detail.contract.days_to_expiry })}</Badge>
+              {detailDays !== null && detailDays <= 60 && detailDays >= 0 ? (
+                <Badge tone="warning" dot>{t('contracts.expiryNotice', { n: detailDays })}</Badge>
               ) : null}
             </div>
 
@@ -710,7 +711,7 @@ export function ContractsPage() {
                       <InfoRow label={t('contracts.paymentTermsDays')} value={`${detail.contract.payment_terms_days} ${t('common.days')}`} />
                       <InfoRow label={t('contracts.graceDays')} value={`${detail.contract.grace_days} ${t('common.days')}`} />
                       <InfoRow label={t('contracts.paymentTerms')} value={detail.contract.payment_terms || '—'} />
-                      <InfoRow label={t('contracts.daysToExpiry')} value={num(detail.contract.days_to_expiry) >= 0 ? detail.contract.days_to_expiry : t('status.expired')} />
+                      <InfoRow label={t('contracts.daysToExpiry')} value={detailDays !== null && detailDays >= 0 ? `${detailDays} ${t('common.days')}` : t('status.expired')} />
                     </div>
                   </div>
                 </Panel>

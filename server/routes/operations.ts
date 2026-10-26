@@ -159,14 +159,27 @@ operationsRouter.get(
        ORDER BY r.status, r.route_no`,
       params,
     )
+    const summaryParams: unknown[] = [from, to]
+    let tripScope = ''
+    if (status) {
+      summaryParams.push(status)
+      tripScope += ` AND tr.route_id IN (SELECT sr.id FROM routes sr WHERE sr.archived_at IS NULL AND sr.status = $${summaryParams.length})`
+    }
+    if (search) {
+      summaryParams.push(`%${search}%`)
+      tripScope += ` AND tr.route_id IN (SELECT sr.id FROM routes sr WHERE sr.archived_at IS NULL AND (sr.name_en ILIKE $${summaryParams.length} OR sr.name_ar ILIKE $${summaryParams.length} OR sr.route_no ILIKE $${summaryParams.length} OR sr.origin ILIKE $${summaryParams.length} OR sr.destination ILIKE $${summaryParams.length}))`
+    }
     const summary = await q(
       `SELECT
         COUNT(*) FILTER (WHERE status = 'active') AS active,
         COUNT(*) FILTER (WHERE status = 'paused') AS paused,
-        (SELECT COUNT(*) FROM trips WHERE trip_type = 'fixed' AND scheduled_departure::date BETWEEN $1::date AND $2::date) AS trips,
-        (SELECT COALESCE(SUM(recognized_revenue),0) FROM trips WHERE trip_type = 'fixed' AND status = 'completed' AND scheduled_departure::date BETWEEN $1::date AND $2::date) AS revenue
+        COUNT(*) AS total,
+        (SELECT COUNT(*) FROM trips tr WHERE tr.trip_type = 'fixed' AND tr.status <> 'cancelled'
+           AND tr.scheduled_departure::date BETWEEN $1::date AND $2::date ${tripScope}) AS trips,
+        (SELECT COALESCE(SUM(tr.recognized_revenue),0) FROM trips tr WHERE tr.trip_type = 'fixed' AND tr.status = 'completed'
+           AND tr.scheduled_departure::date BETWEEN $1::date AND $2::date ${tripScope}) AS revenue
        FROM routes WHERE archived_at IS NULL`,
-      [from, to],
+      summaryParams,
     )
     res.json(serialize({ data: rows, summary: summary[0], range: { from, to } }))
   }),
@@ -674,13 +687,12 @@ operationsRouter.get(
     const vehicles = await q(
       `SELECT v.id, v.vehicle_no, v.plate, v.make, v.model, v.category, v.seats, v.status, d.full_name AS driver_name
        FROM vehicles v LEFT JOIN drivers d ON d.id = v.assigned_driver_id
-       WHERE v.archived_at IS NULL ${vehicleId ? 'AND v.id = $1' : ''}
+       WHERE v.archived_at IS NULL
        ORDER BY v.vehicle_no`,
-      vehicleId ? [vehicleId] : [],
     )
     const trips = await q(
       `SELECT t.id, t.trip_no, t.trip_type, t.origin, t.destination, t.scheduled_departure, t.expected_arrival,
-        t.status, t.vehicle_id, t.driver_id, t.route_id, t.customer_id, t.quoted_price, t.recognized_revenue,
+        t.status, t.vehicle_id, t.driver_id, t.route_id, t.customer_id, t.quoted_price, t.recognized_revenue, t.notes,
         r.name_en AS route_name, r.name_ar AS route_name_ar, c.name AS customer_name, d.full_name AS driver_name,
         v.plate AS vehicle_plate
        FROM trips t
@@ -690,7 +702,7 @@ operationsRouter.get(
        LEFT JOIN vehicles v ON v.id = t.vehicle_id
        WHERE t.scheduled_departure::date BETWEEN $1::date AND $2::date
          AND t.status NOT IN ('cancelled','missed')
-         ${vehicleId ? 'AND t.vehicle_id = $3' : ''}
+         ${vehicleId ? 'AND (t.vehicle_id = $3 OR t.vehicle_id IS NULL)' : ''}
        ORDER BY t.scheduled_departure`,
       vehicleId ? [from, to, vehicleId] : [from, to],
     )
@@ -740,8 +752,10 @@ async function syncMaintenanceExpense(recordId: string, actorId: string, tx: Que
   if (!m) return
   if (m.status === 'completed' && Number(m.cost) > 0) {
     if (m.expense_id) {
+      // Revive the expense when a previously voided record becomes billable again.
       await tx.query(
-        `UPDATE expenses SET amount = $2, description = $3, vehicle_id = $4, expense_date = $5, updated_by = $6 WHERE id = $1 AND status = 'posted'`,
+        `UPDATE expenses SET amount = $2, description = $3, vehicle_id = $4, expense_date = $5, status = 'posted',
+           void_reason = NULL, updated_by = $6 WHERE id = $1`,
         [m.expense_id, Number(m.cost), `Maintenance ${m.record_no}: ${m.description}`, m.vehicle_id, toDateOnly(m.end_date), actorId],
       )
     } else {
@@ -755,7 +769,8 @@ async function syncMaintenanceExpense(recordId: string, actorId: string, tx: Que
       )
       await tx.query(`UPDATE maintenance_records SET expense_id = $2 WHERE id = $1`, [m.id, expenseId])
     }
-  } else if (m.expense_id && m.status !== 'completed') {
+  } else if (m.expense_id) {
+    // Covers reverted records and completed records whose cost dropped to zero.
     await tx.query(
       `UPDATE expenses SET status = 'void', void_reason = 'Maintenance record reverted', updated_by = $2 WHERE id = $1 AND status = 'posted'`,
       [m.expense_id, actorId],
@@ -785,10 +800,12 @@ operationsRouter.get(
     )
     const summary = await q(
       `SELECT
-        COUNT(*) FILTER (WHERE status IN ('scheduled','in_progress')) AS active,
-        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-        COALESCE(SUM(cost) FILTER (WHERE status = 'completed'),0) AS total_cost
-       FROM maintenance_records`,
+        COUNT(*) FILTER (WHERE m.status IN ('scheduled','in_progress')) AS active,
+        COUNT(*) FILTER (WHERE m.status = 'completed') AS completed,
+        COALESCE(SUM(m.cost) FILTER (WHERE m.status = 'completed'),0) AS total_cost
+       FROM maintenance_records m
+       ${where}`,
+      params,
     )
     res.json(serialize({ data: rows, summary: summary[0] }))
   }),

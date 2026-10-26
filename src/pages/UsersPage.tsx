@@ -233,7 +233,7 @@ export function UsersPage() {
 
   function openCreate() {
     setEditing(null)
-    setForm(emptyForm(roles[0]?.id ?? ''))
+    setForm(emptyForm())
     setFormOpen(true)
   }
 
@@ -637,6 +637,7 @@ export function UsersPage() {
                 disabled={editing?.id === currentUser?.id}
                 onChange={(event) => setForm({ ...form, role_id: event.target.value })}
               >
+                {!editing ? <option value="" disabled>{t('users.selectRolePlaceholder')}</option> : null}
                 {roles.map((role) => (
                   <option key={role.id} value={role.id}>
                     {roleLabel(role)}

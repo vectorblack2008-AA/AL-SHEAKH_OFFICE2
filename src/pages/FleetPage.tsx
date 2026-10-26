@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   BusFront,
@@ -52,6 +52,7 @@ interface FleetResponse {
     operating: number
     revenue: number
     expenses: number
+    expiring: number
     utilization: number
   }
   range: DateRange
@@ -198,14 +199,7 @@ export function FleetPage() {
 
   const summary = listQuery.data?.summary
   const rows = listQuery.data?.data ?? []
-
-  const expiring = useMemo(() => {
-    return rows.filter((vehicle) => {
-      const registration = relativeDays(vehicle.registration_expiry)
-      const insurance = relativeDays(vehicle.insurance_expiry)
-      return (registration !== null && registration <= 30) || (insurance !== null && insurance <= 30)
-    }).length
-  }, [rows])
+  const expiring = summary?.expiring ?? 0
 
   function openCreate() {
     setEditing(null)
@@ -369,8 +363,9 @@ export function FleetPage() {
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-1">
-                          <Badge tone={regTone} className="text-[0.56rem]">{t('fleet.registrationDue')}</Badge>
-                          <Badge tone={insTone} className="text-[0.56rem]">{t('fleet.insuranceDue')}</Badge>
+                          {regTone !== 'neutral' ? <Badge tone={regTone} className="text-[0.56rem]">{t('fleet.registrationDue')}</Badge> : null}
+                          {insTone !== 'neutral' ? <Badge tone={insTone} className="text-[0.56rem]">{t('fleet.insuranceDue')}</Badge> : null}
+                          {regTone === 'neutral' && insTone === 'neutral' ? <span className="text-[0.64rem] text-muted">—</span> : null}
                         </div>
                       </td>
                       <td>

@@ -106,7 +106,7 @@ export function DispatchPage() {
       api.patch(`/api/trips/${payload.id}`, {
         vehicle_id: payload.vehicle_id,
         driver_id: payload.driver_id,
-        ...(payload.notes ? { notes: payload.notes } : {}),
+        notes: payload.notes,
       }),
     onSuccess: () => {
       toast.success(t('common.saved'))
@@ -217,7 +217,7 @@ export function DispatchPage() {
   }
 
   function shiftWeek(direction: number) {
-    const next = addDaysISO(weekStart, direction * 7)
+    const next = direction === 0 ? startOfWeek() : addDaysISO(weekStart, direction * 7)
     setWeekStart(next)
     const todayIndex = Math.round((new Date(`${todayISO()}T12:00:00`).getTime() - new Date(`${next}T12:00:00`).getTime()) / 86_400_000)
     setSelectedDay(todayIndex >= 0 && todayIndex <= 6 ? todayIndex : 0)
@@ -227,7 +227,7 @@ export function DispatchPage() {
     setAssignTrip(trip)
     setAssignVehicle(trip.vehicle_id ?? '')
     setAssignDriver(trip.driver_id ?? '')
-    setAssignNote('')
+    setAssignNote(trip.notes ?? '')
   }
 
   function submitAssign() {
@@ -251,6 +251,7 @@ export function DispatchPage() {
   const dayMaintenance = maintenance.filter((record) => String(record.start_date).slice(0, 10) <= selectedDate && String(record.end_date).slice(0, 10) >= selectedDate)
 
   const vehicleOptions = vehicles.filter((vehicle) => vehicle.status !== 'inactive')
+  const boardVehicles = vehicleFilter ? vehicles.filter((vehicle) => vehicle.id === vehicleFilter) : vehicles
   const driverOptions = (driversQuery.data?.data ?? []).filter((driver) => driver.status !== 'inactive')
 
   return (
@@ -284,7 +285,7 @@ export function DispatchPage() {
 
       <StatStrip
         items={[
-          { label: t('dispatch.tripCount', { n: '' }).replace('{n}', '').trim() || t('dispatch.timeline'), value: stats.total, hint: t('dispatch.stats'), tone: 'accent' },
+          { label: t('dispatch.totalTrips'), value: stats.total, hint: t('dispatch.stats'), tone: 'accent' },
           { label: t('dispatch.scheduled'), value: stats.scheduled, tone: 'info' as 'default' },
           { label: t('dispatch.completed'), value: stats.completed, tone: 'positive' },
           { label: t('dispatch.unassignedCount'), value: stats.unassigned, tone: stats.unassigned ? 'warning' : 'default' },
@@ -332,7 +333,7 @@ export function DispatchPage() {
                       </div>
                     ))}
                   </div>
-                  {vehicles.map((vehicle) => {
+                  {boardVehicles.map((vehicle) => {
                     const vehicleTrips = visibleTrips.filter((trip) => trip.vehicle_id === vehicle.id)
                     return (
                       <div key={vehicle.id} className="grid border-b border-border last:border-0" style={{ gridTemplateColumns: '13rem repeat(7, minmax(0, 1fr))' }}>
@@ -394,7 +395,7 @@ export function DispatchPage() {
                       </div>
                     )
                   })}
-                  {!vehicles.length ? (
+                  {!boardVehicles.length ? (
                     <EmptyState icon={<Gauge size={18} />} title={t('fleet.empty')} hint={t('fleet.emptyHint')} />
                   ) : null}
                 </div>
@@ -487,7 +488,7 @@ export function DispatchPage() {
                   </div>
                 )) : (
                   <div className="flex items-center gap-2 rounded-xl border border-positive/20 bg-positive-soft px-3 py-3 text-[0.7rem] font-medium text-positive">
-                    <CircleCheck size={14} /> {t('dispatch.noConflicts')}
+                    <CircleCheck size={14} /> {t('dispatch.noUnassigned')}
                   </div>
                 )}
               </div>
@@ -580,12 +581,13 @@ export function DispatchPage() {
               </Select>
             </Field>
             <Field label={t('trips.driver')}>
-              <Select value={assignDriver} onChange={(event) => setAssignDriver(event.target.value)} disabled={!can('view_drivers')}>
+              <Select value={assignDriver} onChange={(event) => setAssignDriver(event.target.value)} disabled={!can('view_drivers') || Boolean(driversQuery.error)}>
                 <option value="">{t('common.unassigned')}</option>
                 {driverOptions.map((driver) => (
                   <option key={driver.id} value={driver.id}>{driver.full_name} · {driver.driver_no}</option>
                 ))}
               </Select>
+              {driversQuery.error ? <p className="mt-1 text-[0.64rem] text-negative">{errorMessage(driversQuery.error)}</p> : null}
             </Field>
             <Field label={t('trips.notes')}>
               <Textarea value={assignNote} onChange={(event) => setAssignNote(event.target.value)} rows={2} />

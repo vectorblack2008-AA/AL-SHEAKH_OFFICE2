@@ -216,6 +216,7 @@ export function SettingsPage() {
       toast.success(t('settings.resetWorkspaceSuccess'))
       setResetOpen(false)
       setResetPhrase('')
+      initialized.current = false
       void queryClient.invalidateQueries()
       void refreshConfig()
     },
@@ -254,6 +255,14 @@ export function SettingsPage() {
     if (num(form.invoice_terms_days) < 0 || num(form.invoice_terms_days) > 365) {
       toast.error(t('error.validation'), t('settings.invoiceTerms'))
       return
+    }
+    if (form.timezone.trim()) {
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: form.timezone.trim() }).format()
+      } catch {
+        toast.error(t('error.validation'), t('settings.timezone'))
+        return
+      }
     }
     saveSettingsMutation.mutate({
       company_name_en: form.company_name_en.trim(),
@@ -323,7 +332,7 @@ export function SettingsPage() {
   }
 
   const demoOn = Boolean(settings.demo_mode)
-  const realRecords = num(systemInfo?.counts.vehicles) > 0
+  const realRecords = Object.values(systemInfo?.counts ?? {}).some((value) => num(value) > 0)
   const seedBlocked = demoOn || realRecords || !canManage
 
   return (
@@ -436,7 +445,7 @@ export function SettingsPage() {
                       onChange={(event) => setForm({ ...form, invoice_terms_days: event.target.value })}
                     />
                   </Field>
-                  <Field label={t('settings.timezone')}>
+                  <Field label={t('settings.timezone')} hint={t('settings.timezoneHint')}>
                     <Input
                       disabled={!canManage}
                       value={form.timezone}

@@ -30,7 +30,7 @@ import { PageError, PageSkeleton, PeriodPicker, StatStrip, useDebounced, type Da
 
 interface RoutesResponse {
   data: FixedRoute[]
-  summary: { active: number; paused: number; trips: number; revenue: number }
+  summary: { active: number; paused: number; total: number; trips: number; revenue: number }
   range: DateRange
 }
 
@@ -200,23 +200,37 @@ export function RoutesPage() {
       toast.error(t('error.validation'), t('common.required'))
       return
     }
-    saveMutation.mutate({
-      name_en: form.name_en.trim(),
-      name_ar: form.name_ar.trim(),
-      origin: form.origin.trim(),
-      destination: form.destination.trim(),
-      stops: form.stops.split(',').map((stop) => stop.trim()).filter(Boolean),
-      operating_days: form.operating_days,
-      departure_time: form.departure_time,
-      duration_minutes: Number(form.duration_minutes),
-      price: Number(form.price),
-      default_vehicle_id: form.default_vehicle_id || null,
-      default_driver_id: form.default_driver_id || null,
-      effective_from: form.effective_from,
-      effective_to: form.effective_to || null,
-      status: form.status,
-      notes: form.notes.trim() || null,
-    })
+    const base = editing ? formFromRoute(editing) : null
+    const changed = (key: keyof RouteForm) => {
+      if (!base) return true
+      const next = form[key]
+      const previous = base[key]
+      if (Array.isArray(next) || Array.isArray(previous)) {
+        return (Array.isArray(next) ? next : []).join(',') !== (Array.isArray(previous) ? previous : []).join(',')
+      }
+      return String(next) !== String(previous)
+    }
+    const payload: Record<string, unknown> = {}
+    if (changed('name_en')) payload.name_en = form.name_en.trim()
+    if (changed('name_ar')) payload.name_ar = form.name_ar.trim()
+    if (changed('origin')) payload.origin = form.origin.trim()
+    if (changed('destination')) payload.destination = form.destination.trim()
+    if (changed('stops')) payload.stops = form.stops.split(',').map((stop) => stop.trim()).filter(Boolean)
+    if (changed('operating_days')) payload.operating_days = form.operating_days
+    if (changed('departure_time')) payload.departure_time = form.departure_time
+    if (changed('duration_minutes')) payload.duration_minutes = Number(form.duration_minutes)
+    if (changed('price')) payload.price = Number(form.price)
+    if (changed('default_vehicle_id')) payload.default_vehicle_id = form.default_vehicle_id || null
+    if (changed('default_driver_id')) payload.default_driver_id = form.default_driver_id || null
+    if (changed('effective_from')) payload.effective_from = form.effective_from
+    if (changed('effective_to')) payload.effective_to = form.effective_to || null
+    if (changed('status')) payload.status = form.status
+    if (changed('notes')) payload.notes = form.notes.trim() || null
+    if (editing && Object.keys(payload).length === 0) {
+      toast.info(t('common.noChanges'), t('routes.noChangesHint'))
+      return
+    }
+    saveMutation.mutate(payload)
   }
 
   return (
@@ -239,7 +253,7 @@ export function RoutesPage() {
             { label: t('routes.activeRoutes'), value: num(summary.active), hint: `${num(summary.paused)} ${t('routes.pausedRoutes')}`, tone: 'positive' },
             { label: t('routes.scheduledTrips'), value: num(summary.trips), hint: t('common.period') },
             { label: t('routes.routeRevenue'), value: money(summary.revenue, currency, language, true), tone: 'accent' },
-            { label: t('routes.activeRoutes'), value: `${num(summary.active)}/${rows.length}`, hint: t('common.total') },
+            { label: t('routes.totalRoutes'), value: num(summary.total), hint: `${num(summary.active)} ${t('routes.activeRoutes')}` },
           ]}
         />
       ) : null}
@@ -281,7 +295,7 @@ export function RoutesPage() {
                   <th>{t('routes.operatingDays')}</th>
                   <th>{t('routes.departureTime')}</th>
                   <th className="text-end">{t('routes.price')}</th>
-                  <th className="text-end">{t('routes.tripCount')}</th>
+                  <th className="text-end">{t('routes.tripCountLabel')}</th>
                   <th className="text-end">{t('routes.routeRevenue')}</th>
                   <th>{t('common.status')}</th>
                   <th className="text-end">{t('common.actions')}</th>
@@ -313,7 +327,7 @@ export function RoutesPage() {
                     <td><StatusBadge status={route.status} /></td>
                     <td>
                       <div className="flex items-center justify-end gap-1">
-                        {canGenerate ? <IconButton label={t('routes.generate')} size="sm" onClick={() => { setGenerateTarget(route); setGeneration(null); setGenerateRange({ from: todayISO(), to: addDaysISO(todayISO(), 14) }) }}><Play size={13} /></IconButton> : null}
+                        {canGenerate ? <IconButton label={route.status === 'active' ? t('routes.generate') : t('routes.generateInactive')} size="sm" disabled={route.status !== 'active'} onClick={() => { setGenerateTarget(route); setGeneration(null); setGenerateRange({ from: todayISO(), to: addDaysISO(todayISO(), 14) }) }}><Play size={13} /></IconButton> : null}
                         <IconButton label={t('common.view')} size="sm" onClick={() => setDetail(route)}><Search size={13} /></IconButton>
                         {canManage ? (
                           <>
@@ -413,9 +427,10 @@ export function RoutesPage() {
               variant="primary"
               icon={<CalendarClock size={14} />}
               loading={generateMutation.isPending}
+              disabled={generateTarget?.status !== 'active'}
               onClick={() => generateTarget && generateMutation.mutate(generateTarget.id)}
             >
-              {t('routes.generate')}
+              {generateTarget && generateTarget.status !== 'active' ? t('routes.generateInactive') : t('routes.generate')}
             </Button>
           </>
         }

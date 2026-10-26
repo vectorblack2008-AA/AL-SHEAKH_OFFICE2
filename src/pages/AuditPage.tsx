@@ -48,6 +48,7 @@ const ACTIONS = [
   'update_permissions',
   'seed_demo',
   'reset_demo',
+  'reset_workspace',
   'recognize_revenue',
   'generate_invoice',
   'archive',
@@ -83,6 +84,7 @@ const ACTION_KEYS: Record<string, TranslationKey> = {
   update_permissions: 'audit.action.update_permissions',
   seed_demo: 'audit.action.seed_demo',
   reset_demo: 'audit.action.reset_demo',
+  reset_workspace: 'audit.action.reset_workspace',
   recognize_revenue: 'audit.action.recognize_revenue',
   generate_invoice: 'audit.action.generate_invoice',
   archive: 'audit.action.archive',
@@ -123,6 +125,7 @@ function actionTone(action: string): Tone {
       return 'info'
     case 'seed_demo':
     case 'reset_demo':
+    case 'reset_workspace':
     case 'reassign':
       return 'warning'
     case 'archive':

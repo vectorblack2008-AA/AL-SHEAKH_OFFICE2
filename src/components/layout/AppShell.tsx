@@ -166,6 +166,7 @@ function NotificationMenu() {
   const markOne = useMutation({
     mutationFn: (id: string) => api.patch(`/api/notifications/${id}/read`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: (error) => toast.error(t('error.generic'), errorMessage(error)),
   })
 
   const unread = data?.unread ?? 0
@@ -253,7 +254,7 @@ function NotificationMenu() {
 }
 
 function UserMenu() {
-  const { t, user, logout, language } = useApp()
+  const { t, user, logout, language, can } = useApp()
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -294,7 +295,7 @@ function UserMenu() {
         </Badge>
       </div>
       <div className="pt-1">
-        {allNavItems.some((item) => item.path === '/settings') ? (
+        {can('view_settings') ? (
           <button
             type="button"
             onClick={() => navigate('/settings')}

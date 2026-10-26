@@ -512,6 +512,7 @@ export interface DashboardData {
     invoicesIssued: number
     paymentsCollected: number
     outstandingReceivables: number
+    overdueReceivables: number
     operatingExpenses: number
     netOperatingProfit: number
     netMargin: number

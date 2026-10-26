@@ -104,6 +104,15 @@ function nullify<T extends Record<string, unknown>>(value: T): T {
   return out as T
 }
 
+async function categoryIsOperating(categoryId: string) {
+  const category = await one<{ is_operating: boolean }>(
+    `SELECT is_operating FROM expense_categories WHERE id = $1`,
+    [categoryId],
+  )
+  if (!category) throw new ApiError(400, 'Invalid expense category', 'INVALID_CATEGORY')
+  return Boolean(category.is_operating)
+}
+
 /* -------------------------------- Contracts -------------------------------- */
 
 financeRouter.get(
@@ -648,15 +657,16 @@ financeRouter.post(
   asyncHandler(async (req, res) => {
     const body = nullify(parseBody(expenseSchema, req.body))
     const allocated = validateAllocations(body.amount, body.allocations)
+    const isOperating = await categoryIsOperating(body.category_id)
     const seq = await nextSequence('expense')
     const id = randomUUID()
     const row = await transaction(async (tx) => {
       const created = await tx.query(
         `INSERT INTO expenses (id, expense_no, expense_date, category_id, description, amount, vendor, vehicle_id, driver_id, trip_id, contract_id, is_operating, status, notes, created_by, updated_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'posted',$12,$13,$13) RETURNING *`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'posted',$13,$14,$14) RETURNING *`,
         [id, code('EXP', seq, 5), body.expense_date, body.category_id, body.description, body.amount,
           body.vendor ?? null, body.vehicle_id ?? null, body.driver_id ?? null, body.trip_id ?? null,
-          body.contract_id ?? null, body.notes ?? null, req.user!.id],
+          body.contract_id ?? null, isOperating, body.notes ?? null, req.user!.id],
       )
       for (const allocation of body.allocations) {
         await tx.query(
@@ -683,8 +693,10 @@ financeRouter.patch(
     if (!before) throw new ApiError(404, 'Expense not found', 'NOT_FOUND')
     if (before.status === 'void') throw new ApiError(409, 'Void expenses cannot be edited', 'EXPENSE_VOID')
     if (body.amount && body.allocations) validateAllocations(body.amount, body.allocations)
+    const operating = body.category_id ? await categoryIsOperating(body.category_id) : undefined
     const allowed = ['expense_date','category_id','description','amount','vendor','vehicle_id','driver_id','trip_id','contract_id','notes']
-    const entries = Object.entries(body).filter(([key]) => allowed.includes(key))
+    const entries: Array<[string, unknown]> = Object.entries(body).filter(([key]) => allowed.includes(key))
+    if (operating !== undefined) entries.push(['is_operating', operating])
     const row = await transaction(async (tx) => {
       if (entries.length > 0) {
         const assignments = entries.map(([key], index) => `${key} = $${index + 2}`).join(', ')

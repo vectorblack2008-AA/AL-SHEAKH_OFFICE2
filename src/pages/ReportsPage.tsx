@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   BarChart,
@@ -110,6 +110,16 @@ export function ReportsPage() {
   })
 
   const data = reportQuery.data
+  const receivableCount = data?.receivables.length ?? 0
+  const receivablePages = Math.max(1, Math.ceil(receivableCount / pageSize))
+
+  useEffect(() => {
+    setPage(1)
+  }, [range.from, range.to])
+
+  useEffect(() => {
+    if (page > receivablePages) setPage(receivablePages)
+  }, [page, receivablePages])
 
   const totals = useMemo(() => {
     if (!data) {
@@ -325,7 +335,7 @@ export function ReportsPage() {
             <ChartCard
               title={t('reports.monthlyTrend')}
               hint={t('reports.reportHint')}
-              action={<LegendDots items={[{ label: t('common.revenue'), color: palette[0] }, { label: t('reports.trips'), color: palette[2] }]} />}
+              action={<LegendDots items={[{ label: t('common.revenue'), color: palette[0] }, { label: t('dispatch.completed'), color: palette[2] }]} />}
             >
               {monthly.length ? (
                 <div className="h-[272px] w-full">
@@ -344,12 +354,12 @@ export function ReportsPage() {
                       <Tooltip
                         content={
                           <ChartTooltip
-                            formatter={(value: number, name: string) => (name === t('reports.trips') ? num(value) : money(value, currency, language))}
+                            formatter={(value: number, name: string) => (name === t('dispatch.completed') ? num(value) : money(value, currency, language))}
                           />
                         }
                       />
                       <Area yAxisId="left" type="monotone" dataKey="revenue" name={t('common.revenue')} stroke={palette[0]} strokeWidth={1.8} fill="url(#reportRevenueFill)" />
-                      <Line yAxisId="right" type="monotone" dataKey="completed" name={t('reports.trips')} stroke={palette[2]} strokeWidth={1.6} dot={false} />
+                      <Line yAxisId="right" type="monotone" dataKey="completed" name={t('dispatch.completed')} stroke={palette[2]} strokeWidth={1.6} dot={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -702,7 +712,7 @@ export function ReportsPage() {
               </table>
             </div>
             <div className="border-t border-border px-3">
-              <Pagination page={page} pageSize={pageSize} total={data.receivables.length} onPage={setPage} />
+              <Pagination page={page} pageSize={pageSize} total={receivableCount} onPage={setPage} />
             </div>
           </Panel>
         </div>

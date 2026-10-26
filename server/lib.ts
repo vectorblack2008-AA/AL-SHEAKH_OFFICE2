@@ -187,7 +187,23 @@ export async function notifyAdmins(
   }
 }
 
-export const BUSINESS_TIMEZONE = process.env.SHOP_TIMEZONE || 'Africa/Cairo'
+export let BUSINESS_TIMEZONE = process.env.SHOP_TIMEZONE || 'Africa/Cairo'
+
+/** Validate an IANA timezone name without throwing. */
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Keep date helpers aligned with the workspace setting while the process runs. */
+export function setBusinessTimezone(timeZone?: string | null) {
+  if (!timeZone || !isValidTimeZone(timeZone)) return
+  BUSINESS_TIMEZONE = timeZone
+}
 
 /**
  * Today's date in the office timezone. Serverless runtimes run in UTC, so using
@@ -258,8 +274,30 @@ export function monthPeriods(startDate: string, endDate: string, today = new Dat
   return periods
 }
 
+/** Format a database Date for CSV: date-only values stay dates, timestamps use office time. */
+function csvDate(value: Date): string {
+  const dateOnly =
+    value.getUTCHours() === 0 &&
+    value.getUTCMinutes() === 0 &&
+    value.getUTCSeconds() === 0 &&
+    value.getUTCMilliseconds() === 0
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    ...(dateOnly ? {} : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' as const }),
+  }).formatToParts(value)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  const date = `${part('year')}-${part('month')}-${part('day')}`
+  return dateOnly ? date : `${date} ${part('hour')}:${part('minute')}`
+}
+
 export function csvEscape(value: unknown): string {
-  const text = value === null || value === undefined ? '' : String(value)
+  let text: string
+  if (value === null || value === undefined) text = ''
+  else if (value instanceof Date) text = csvDate(value)
+  else text = String(value)
   if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`
   return text
 }
@@ -276,7 +314,7 @@ export function requireAdmin(req: Request) {
 
 export function pagination(query: Request['query']) {
   const page = Math.max(1, Number(query.page) || 1)
-  const pageSize = Math.min(100, Math.max(5, Number(query.pageSize) || 20))
+  const pageSize = Math.min(500, Math.max(5, Number(query.pageSize) || 20))
   return { page, pageSize, offset: (page - 1) * pageSize }
 }
 

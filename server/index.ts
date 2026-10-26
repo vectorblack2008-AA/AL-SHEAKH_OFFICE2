@@ -1,11 +1,14 @@
 import { createApp } from './app.js'
 import { db, initializeDatabase } from './db.js'
+import { setBusinessTimezone } from './lib.js'
 
 const PORT = Number(process.env.PORT || 3001)
 const app = createApp()
 
 async function start() {
   await initializeDatabase()
+  const settings = await db.query<{ timezone: string }>(`SELECT timezone FROM business_settings WHERE id = 1`)
+  setBusinessTimezone(settings.rows[0]?.timezone)
   const server = app.listen(PORT, () => {
     console.log(`[api] Al-Sheikh Office API listening on http://localhost:${PORT} (${db.driver})`)
   })

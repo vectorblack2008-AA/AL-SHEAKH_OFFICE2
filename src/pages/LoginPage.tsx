@@ -189,7 +189,7 @@ export function LoginPage() {
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
                       className="absolute end-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted transition hover:text-text"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                     >
                       {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
@@ -197,19 +197,19 @@ export function LoginPage() {
                 </div>
 
                 {error ? (
-                  <div className="rounded-xl border border-negative/25 bg-negative-soft px-3 py-2.5 text-[0.7rem] leading-relaxed text-negative">
+                  <div role="alert" aria-live="assertive" className="rounded-xl border border-negative/25 bg-negative-soft px-3 py-2.5 text-[0.7rem] leading-relaxed text-negative">
                     {error}
                   </div>
                 ) : null}
 
-                <button type="submit" disabled={loading} className="btn btn-primary h-11 w-full">
+                <button type="submit" disabled={loading} aria-busy={loading} className="btn btn-primary h-11 w-full">
                   {loading ? <Spinner size={16} className="text-current" /> : null}
                   {loading ? t('auth.signingIn') : t('auth.signIn')}
                   {!loading ? <ArrowRight size={15} className={isRtl ? 'rotate-180' : ''} /> : null}
                 </button>
               </form>
 
-              {config?.showDemoCredentials ? (
+              {config?.showDemoCredentials && config.demoMode ? (
                 <div className="mt-8 border-t border-border pt-5">
                   <div className="flex items-center justify-between">
                     <p className="eyebrow text-[0.56rem]">{t('auth.demoCredentials')}</p>

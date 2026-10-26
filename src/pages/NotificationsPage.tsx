@@ -239,7 +239,7 @@ export function NotificationsPage() {
               hint={t('notifications.emptyHint')}
               action={
                 canManage && filter === 'all' ? (
-                  <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setFormOpen(true)}>
+                  <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => { setForm(emptyForm()); setFormOpen(true) }}>
                     {t('notifications.createTitle')}
                   </Button>
                 ) : undefined
@@ -318,7 +318,7 @@ export function NotificationsPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => { setFormOpen(false); setForm(emptyForm()) }}>{t('common.cancel')}</Button>
-            <Button variant="primary" loading={createMutation.isPending} onClick={submit}>{t('common.save')}</Button>
+            <Button variant="primary" loading={createMutation.isPending} disabled={Boolean(usersQuery.error)} onClick={submit}>{t('common.save')}</Button>
           </>
         }
       >
@@ -344,6 +344,7 @@ export function NotificationsPage() {
                   <option key={user.id} value={user.id}>{user.full_name}</option>
                 ))}
               </Select>
+              {usersQuery.error ? <p className="mt-1 text-[0.64rem] text-negative">{errorMessage(usersQuery.error)}</p> : null}
             </Field>
           </div>
           <Field label={t('notifications.link')} hint={t('notifications.linkHint')}>

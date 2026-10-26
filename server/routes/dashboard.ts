@@ -119,14 +119,19 @@ async function invoiceCollected(req: Request, from: string, to: string) {
   if (req.query.customerId) { outstandingParams.push(String(req.query.customerId)); outstandingConditions.push(`i.customer_id = $${outstandingParams.length}`) }
   if (req.query.contractId) { outstandingParams.push(String(req.query.contractId)); outstandingConditions.push(`i.contract_id = $${outstandingParams.length}`) }
   const outstanding = await q(
-    `SELECT COALESCE(SUM(i.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id AND p.payment_date <= $1::date),0)),0) AS outstanding
-     FROM invoices i WHERE ${outstandingConditions.join(' AND ')}`,
+    `SELECT COALESCE(SUM(balance),0) AS outstanding,
+       COALESCE(SUM(balance) FILTER (WHERE due_date < $1::date),0) AS overdue
+     FROM (
+       SELECT i.due_date, i.total - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id AND p.payment_date <= $1::date),0) AS balance
+       FROM invoices i WHERE ${outstandingConditions.join(' AND ')}
+     ) balances`,
     outstandingParams,
   )
   return {
     invoiced: Number(invoices[0]?.invoiced ?? 0),
     collected: Number(payments[0]?.collected ?? 0),
     outstanding: Number(outstanding[0]?.outstanding ?? 0),
+    overdue: Number(outstanding[0]?.overdue ?? 0),
   }
 }
 
@@ -396,6 +401,7 @@ dashboardRouter.get(
           invoicesIssued: invoiceData.invoiced,
           paymentsCollected: invoiceData.collected,
           outstandingReceivables: invoiceData.outstanding,
+          overdueReceivables: invoiceData.overdue,
           operatingExpenses: expenses,
           netOperatingProfit: netProfit,
           netMargin: recognizedRevenue > 0 ? Math.round((netProfit / recognizedRevenue) * 1000) / 10 : 0,

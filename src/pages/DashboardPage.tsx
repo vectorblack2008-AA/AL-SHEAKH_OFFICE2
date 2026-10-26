@@ -30,7 +30,6 @@ import {
   Sparkles,
   TrendingUp,
   Users,
-  Wallet,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { api } from '../lib/api'
@@ -40,11 +39,11 @@ import { Badge, Button, IconButton, KpiCard, PageHeader, Panel, Progress, Sectio
 import { ChartCard, ChartEmpty, ChartTooltip, LegendDots, chartAxisStyle, chartGridStyle, useChartPalette } from '../components/charts'
 import { PageError, PageSkeleton, PeriodPicker, StatStrip, type DateRange } from '../components/filters'
 
-const ATTENTION_LINKS = [
-  { href: '/contracts', label: 'dashboard.expiringContracts', icon: CalendarClock },
-  { href: '/revenue', label: 'dashboard.outstanding', icon: Wallet },
-  { href: '/maintenance', label: 'dashboard.maintenance', icon: Receipt },
-] as const
+const ATTENTION_TONES = {
+  warning: 'bg-warning',
+  negative: 'bg-negative',
+  info: 'bg-info',
+} as const
 
 export function DashboardPage() {
   const { t, language, currency } = useApp()
@@ -124,10 +123,10 @@ export function DashboardPage() {
   const sparkTrips = daily.slice(-16).map((row) => row.completed)
   const margin = num(k.recognizedRevenue) > 0 ? (num(k.netOperatingProfit) / num(k.recognizedRevenue)) * 100 : 0
   const avgTripValue = k.completedTrips > 0 ? k.tripRevenue / k.completedTrips : 0
-  const overdue = num(k.outstandingReceivables) - num(k.paymentsCollected)
+  const overdue = num(k.overdueReceivables)
   const attention = [
     { label: t('dashboard.expiringContracts'), value: k.expiringContracts, href: '/contracts', tone: 'warning' as const },
-    { label: t('revenue.overdue'), value: k.missedTrips, href: '/trips', tone: 'negative' as const },
+    { label: t('trips.missed'), value: k.missedTrips, href: '/trips', tone: 'negative' as const },
     { label: t('dashboard.maintenance'), value: k.maintenanceVehicles, href: '/maintenance', tone: 'info' as const },
   ]
 
@@ -395,7 +394,7 @@ export function DashboardPage() {
               >
                 <span className="flex items-center gap-2 text-[0.72rem] font-medium text-text-soft">
                   <span
-                    className={`h-1.5 w-1.5 rounded-full ${item.tone === 'warning' ? 'bg-warning' : item.tone === 'negative' ? 'bg-negative' : 'bg-info'}`}
+                    className={`h-1.5 w-1.5 rounded-full ${ATTENTION_TONES[item.tone]}`}
                   />
                   {item.label}
                 </span>
@@ -411,7 +410,7 @@ export function DashboardPage() {
               </p>
               <p className="mt-1 text-[0.92rem] font-semibold tabular text-text">{money(k.outstandingReceivables, currency, language, true)}</p>
               <p className="mt-0.5 text-[0.63rem] text-muted">
-                {t('dashboard.outstanding')} · {money(overdue > 0 ? overdue : 0, currency, language, true)} {t('revenue.overdue')}
+                {t('dashboard.outstanding')} · {money(overdue, currency, language, true)} {t('revenue.overdue')}
               </p>
             </div>
           </div>

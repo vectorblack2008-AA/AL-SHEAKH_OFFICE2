@@ -65,6 +65,7 @@ interface AllocationForm {
   allocated_amount: string
   method: string
   percent: string
+  notes: string
 }
 
 interface ExpenseForm {
@@ -93,7 +94,7 @@ const METHOD_LABELS: Record<string, TranslationKey> = {
 }
 
 function emptyAllocation(): AllocationForm {
-  return { target: 'vehicle', target_id: '', allocated_amount: '0', method: 'manual', percent: '' }
+  return { target: 'vehicle', target_id: '', allocated_amount: '0', method: 'manual', percent: '', notes: '' }
 }
 
 function emptyForm(categoryId = ''): ExpenseForm {
@@ -140,6 +141,7 @@ function formFromExpense(expense: Expense): ExpenseForm {
       allocated_amount: String(allocation.allocated_amount ?? 0),
       method: allocation.method ?? 'manual',
       percent: allocation.percent === null || allocation.percent === undefined ? '' : String(allocation.percent),
+      notes: allocation.notes ?? '',
     })),
   }
 }
@@ -199,13 +201,13 @@ export function ExpensesPage() {
   const contractsQuery = useQuery({
     queryKey: ['expenses', 'contract-options'],
     queryFn: () => api.get<{ data: Contract[] }>('/api/contracts'),
-    enabled: formOpen && can('view_contracts'),
+    enabled: (formOpen || Boolean(detail)) && can('view_contracts'),
   })
 
   const tripsQuery = useQuery({
     queryKey: ['expenses', 'trip-options'],
     queryFn: () => api.get<{ data: Trip[] }>('/api/trips', { pageSize: 200 }),
-    enabled: formOpen && can('view_trips'),
+    enabled: (formOpen || Boolean(detail)) && can('view_trips'),
   })
 
   const rows = listQuery.data?.data ?? []
@@ -239,7 +241,7 @@ export function ExpensesPage() {
       void queryClient.invalidateQueries({ queryKey: ['expenses'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['reports'] })
-      void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      void queryClient.invalidateQueries({ queryKey: ['fleet'] })
     },
     onError: (error) => toast.error(t('error.save'), errorMessage(error)),
   })
@@ -254,6 +256,7 @@ export function ExpensesPage() {
       void queryClient.invalidateQueries({ queryKey: ['expenses'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['reports'] })
+      void queryClient.invalidateQueries({ queryKey: ['fleet'] })
     },
     onError: (error) => toast.error(t('error.generic'), errorMessage(error)),
   })
@@ -294,6 +297,7 @@ export function ExpensesPage() {
         allocated_amount: num(allocation.allocated_amount),
         method: allocation.method,
         percent: allocation.percent === '' ? null : num(allocation.percent),
+        notes: allocation.notes.trim() || null,
       }))
 
     saveMutation.mutate({
@@ -335,7 +339,7 @@ export function ExpensesPage() {
 
   const headerActions = (
     <>
-      <PeriodPicker value={range} onChange={setRange} />
+      <PeriodPicker value={range} onChange={(next) => { setRange(next); setPage(1) }} />
       {canManage ? (
         <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openCreate}>
           {t('expenses.addExpense')}
@@ -762,7 +766,7 @@ export function ExpensesPage() {
           <Field label={t('expenses.voidReason')} required>
             <Textarea rows={3} value={voidReason} onChange={(event) => setVoidReason(event.target.value)} />
           </Field>
-          <p className="rounded-xl border border-warning/25 bg-warning-soft px-3 py-2 text-[0.7rem] leading-relaxed text-warning">{t('revenue.voidWarning')}</p>
+          <p className="rounded-xl border border-warning/25 bg-warning-soft px-3 py-2 text-[0.7rem] leading-relaxed text-warning">{t('expenses.voidWarning')}</p>
         </div>
       </Modal>
     </div>

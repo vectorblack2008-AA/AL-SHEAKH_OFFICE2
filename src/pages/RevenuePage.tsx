@@ -102,6 +102,15 @@ const INVOICE_STATUSES = ['draft', 'sent', 'partial', 'paid', 'overdue', 'void']
 const PAYMENT_METHODS = ['cash', 'bank_transfer', 'card', 'cheque'] as const
 const REVENUE_CATEGORIES = ['service', 'contract', 'trip'] as const
 
+const REVENUE_CATEGORY_KEYS: Record<string, TranslationKey> = {
+  service: 'revenue.categoryService',
+  contract: 'revenue.categoryContract',
+  trip: 'revenue.categoryTrip',
+  fixed_contract: 'revenue.categoryContract',
+  contract_trip: 'revenue.categoryTrip',
+  private_trip: 'revenue.categoryTrip',
+}
+
 const METHOD_LABELS: Record<string, TranslationKey> = {
   cash: 'revenue.cash',
   bank_transfer: 'revenue.bankTransfer',
@@ -345,7 +354,7 @@ export function RevenuePage() {
     const rows = data.lines
       .map(
         (line) => `<tr>
-          <td>${escapeHtml(line.description)}${line.revenue_category ? `<div class="muted" style="font-size:9px">${escapeHtml(line.revenue_category)}</div>` : ''}</td>
+          <td>${escapeHtml(line.description)}${line.revenue_category ? `<div class="muted" style="font-size:9px">${escapeHtml(t(REVENUE_CATEGORY_KEYS[line.revenue_category] ?? 'revenue.categoryService'))}</div>` : ''}</td>
           <td class="num">${escapeHtml(line.quantity)}</td>
           <td class="num">${escapeHtml(money(line.unit_price, currency, language))}</td>
           <td class="num">${escapeHtml(money(line.line_total, currency, language))}</td>
@@ -411,7 +420,7 @@ export function RevenuePage() {
 
   const headerActions = (
     <>
-      <PeriodPicker value={range} onChange={setRange} />
+      <PeriodPicker value={range} onChange={(next) => { setRange(next); setPage(1) }} />
       {canFinance ? <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openCreate}>{t('revenue.addInvoice')}</Button> : null}
     </>
   )
@@ -460,7 +469,7 @@ export function RevenuePage() {
         {activeTabs}
         {tab === 'invoices' ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <SearchInput value={search} onChange={setSearch} className="w-full sm:w-60" placeholder={t('common.searchPlaceholder')} />
+            <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1) }} className="w-full sm:w-60" placeholder={t('common.searchPlaceholder')} />
             <Select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1) }} className="w-auto min-w-[9rem]">
               <option value="">{t('common.all')} · {t('common.status')}</option>
               {INVOICE_STATUSES.map((item) => <option key={item} value={item}>{t(`status.${item}` as TranslationKey)}</option>)}
@@ -517,10 +526,10 @@ export function RevenuePage() {
                       <td>
                         <div className="flex items-center justify-end gap-1">
                           <IconButton label={t('common.view')} size="sm" onClick={() => setDetailId(invoice.id)}><Search size={13} /></IconButton>
-                          {canFinance && num(invoice.balance) > 0 && invoice.status !== 'void' ? (
+                          {canFinance && num(invoice.balance) > 0 && !['void', 'draft'].includes(invoice.status) ? (
                             <IconButton label={t('revenue.recordPayment')} size="sm" onClick={() => openPayment(invoice)}><CreditCard size={13} /></IconButton>
                           ) : null}
-                          {canFinance && invoice.status !== 'void' ? (
+                          {canFinance && invoice.status !== 'void' && num(invoice.amount_paid) === 0 ? (
                             <IconButton label={t('revenue.voidInvoice')} size="sm" variant="danger" onClick={() => { setVoidTarget(invoice); setVoidReason('') }}><Ban size={13} /></IconButton>
                           ) : null}
                         </div>
@@ -619,7 +628,7 @@ export function RevenuePage() {
                       <td className="text-end tabular text-[0.72rem] font-semibold text-warning">{money(row.outstanding, currency, language)}</td>
                       <td className="text-end tabular text-[0.72rem] text-negative">{money(row.overdue, currency, language)}</td>
                       <td className="text-end">
-                        <Button variant="ghost" size="sm" onClick={() => { setCustomerId(row.id); setTab('invoices'); setPage(1) }}>{t('revenue.customerLedger')}</Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setCustomerId(row.id); setStatus(''); setRange(rangeFromDays(3650)); setTab('invoices'); setPage(1) }}>{t('revenue.customerLedger')}</Button>
                       </td>
                     </tr>
                   ))}
@@ -720,7 +729,7 @@ export function RevenuePage() {
                         lines[index] = { ...line, revenue_category: event.target.value }
                         setForm({ ...form, lines })
                       }}>
-                        {REVENUE_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                        {REVENUE_CATEGORIES.map((category) => <option key={category} value={category}>{t(REVENUE_CATEGORY_KEYS[category])}</option>)}
                       </Select>
                     </Field>
                     <div className="flex items-end justify-between gap-2 sm:flex-col sm:items-end sm:justify-end">
@@ -805,7 +814,7 @@ export function RevenuePage() {
           detailQuery.data ? (
             <>
               <Button variant="secondary" size="sm" icon={<Printer size={13} />} onClick={() => printInvoice(detailQuery.data)}>{t('revenue.printInvoice')}</Button>
-              {canFinance && detailQuery.data.invoice.status !== 'void' && num(detailQuery.data.invoice.balance) > 0 ? (
+              {canFinance && !['void', 'draft'].includes(detailQuery.data.invoice.status) && num(detailQuery.data.invoice.balance) > 0 ? (
                 <Button variant="primary" size="sm" icon={<CreditCard size={13} />} onClick={() => openPayment(detailQuery.data.invoice)}>{t('revenue.recordPayment')}</Button>
               ) : null}
             </>
@@ -863,7 +872,7 @@ export function RevenuePage() {
                   <tbody>
                     {detailQuery.data.lines.map((line) => (
                       <tr key={line.id}>
-                        <td className="text-[0.72rem] text-text">{line.description}<span className="ms-1.5 text-[0.6rem] text-muted">{line.revenue_category}</span></td>
+                        <td className="text-[0.72rem] text-text">{line.description}<span className="ms-1.5 text-[0.6rem] text-muted">{t(REVENUE_CATEGORY_KEYS[line.revenue_category] ?? 'revenue.categoryService')}</span></td>
                         <td className="text-end tabular text-[0.7rem]">{num(line.quantity)}</td>
                         <td className="text-end tabular text-[0.7rem]">{money(line.unit_price, currency, language)}</td>
                         <td className="text-end tabular text-[0.72rem] font-semibold">{money(line.line_total, currency, language)}</td>

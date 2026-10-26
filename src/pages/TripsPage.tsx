@@ -189,7 +189,7 @@ export function TripsPage() {
   const vehiclesQuery = useQuery({
     queryKey: ['trips', 'vehicle-options'],
     queryFn: () => api.get<{ data: Vehicle[] }>('/api/vehicles', { pageSize: 200 }),
-    enabled: can('view_fleet') && formOpen,
+    enabled: can('view_fleet'),
   })
   const driversQuery = useQuery({
     queryKey: ['trips', 'driver-options'],

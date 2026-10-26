@@ -23,12 +23,10 @@ export function PeriodPicker({
   value,
   onChange,
   className,
-  align = 'start',
 }: {
   value: DateRange
   onChange: (range: DateRange) => void
   className?: string
-  align?: 'start' | 'end'
 }) {
   const { t } = useApp()
   const [custom, setCustom] = useState(false)
@@ -36,7 +34,7 @@ export function PeriodPicker({
   const activePreset = useMemo(() => {
     return PRESETS.find((preset) => {
       const range = rangeFromDays(preset.days, value.to)
-      return range.from === value.from && range.to === todayISO()
+      return range.from === value.from && range.to === value.to
     })?.days
   }, [value])
 
@@ -102,7 +100,6 @@ export function PeriodPicker({
             />
           </div>
         </span>
-        {align === 'end' ? null : null}
       </div>
     </div>
   )

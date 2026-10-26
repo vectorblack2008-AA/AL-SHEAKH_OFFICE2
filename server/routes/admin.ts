@@ -9,6 +9,8 @@ import {
   asyncHandler,
   audit,
   BUSINESS_TIMEZONE,
+  isValidTimeZone,
+  setBusinessTimezone,
   pagination,
   parseBody,
   serialize,
@@ -170,7 +172,7 @@ adminRouter.patch(
         vat_rate: z.coerce.number().min(0).max(100).optional(),
         trip_buffer_minutes: z.coerce.number().int().min(0).max(240).optional(),
         operating_hours_per_day: z.coerce.number().min(1).max(24).optional(),
-        timezone: z.string().max(80).optional(),
+        timezone: z.string().trim().max(80).refine(isValidTimeZone, 'Invalid timezone').optional(),
         invoice_terms_days: z.coerce.number().int().min(0).max(365).optional(),
       }),
       req.body,
@@ -183,7 +185,8 @@ adminRouter.patch(
       `UPDATE business_settings SET ${assignments.join(', ')}, updated_by = $${entries.length + 2} WHERE id = 1`,
       [null, ...entries.map(([, value]) => value), req.user!.id],
     )
-    const settings = await one(`SELECT * FROM business_settings WHERE id = 1`)
+    const settings = await one<{ timezone?: string }>(`SELECT * FROM business_settings WHERE id = 1`)
+    setBusinessTimezone(settings?.timezone)
     await audit(req, 'update', 'settings', '1', before, settings)
     res.json(serialize(settings))
   }),
@@ -421,11 +424,12 @@ adminRouter.get(
         (SELECT COUNT(*) FROM payments) AS payments,
         (SELECT COUNT(*) FROM expenses) AS expenses`,
     )
+    const settings = await one<{ timezone?: string }>(`SELECT timezone FROM business_settings WHERE id = 1`)
     res.json(
       serialize({
         counts: counts[0],
         database: db.driver === 'postgres' ? 'PostgreSQL (hosted)' : 'PostgreSQL (PGlite embedded engine)',
-        timezone: BUSINESS_TIMEZONE,
+        timezone: settings?.timezone || BUSINESS_TIMEZONE,
         date: todayDate(),
       }),
     )

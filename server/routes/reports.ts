@@ -243,9 +243,13 @@ reportsRouter.get(
       rows = data.map((r) => [r.record_no, r.start_date, r.end_date, r.maintenance_type, r.description, r.cost, r.vendor, r.status, r.plate])
     } else {
       const data = await q(
-        `SELECT t.trip_no, t.scheduled_departure, c.name, i.invoice_no, p.payment_no, p.payment_date, p.amount, p.method, p.reference
+        `SELECT
+          (SELECT string_agg(t.trip_no, ', ' ORDER BY t.scheduled_departure)
+             FROM invoice_lines il JOIN trips t ON t.id = il.trip_id WHERE il.invoice_id = i.id) AS trip_no,
+          (SELECT MIN(t.scheduled_departure)
+             FROM invoice_lines il JOIN trips t ON t.id = il.trip_id WHERE il.invoice_id = i.id) AS scheduled_departure,
+          c.name, i.invoice_no, p.payment_no, p.payment_date, p.amount, p.method, p.reference
         FROM payments p JOIN invoices i ON i.id=p.invoice_id JOIN customers c ON c.id=i.customer_id
-        LEFT JOIN invoice_lines il ON il.invoice_id=i.id LEFT JOIN trips t ON t.id=il.trip_id
         WHERE p.payment_date BETWEEN $1::date AND $2::date ORDER BY p.payment_date`,
         [from, to],
       )
