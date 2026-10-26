@@ -185,9 +185,12 @@ with a clear message when `DATABASE_URL` is missing on Vercel.
    | `DATABASE_URL` | pooled PostgreSQL connection string |
    | `JWT_SECRET` | 48+ random bytes, hex encoded |
    | `INITIAL_ADMIN_PASSWORD` | strong password for the first admin (required) |
-   | `NODE_ENV` | `production` |
    | `SHOP_TIMEZONE` | `Africa/Cairo` (optional) |
    | `INITIAL_VIEWER_PASSWORD` | optional read-only account password |
+
+   Vercel sets `NODE_ENV=production` for functions automatically. Do **not** add
+   it manually as a project variable: npm then skips devDependencies during the
+   build and Vite cannot compile.
 
    Generate secrets locally:
 
@@ -204,7 +207,8 @@ with a clear message when `DATABASE_URL` is missing on Vercel.
 
 5. Open the app and sign in as `admin@alsheikh.eg` with the password from
    `INITIAL_ADMIN_PASSWORD`, then change it from **Users**. The environment
-   variable is only read the first time an empty database is initialised.
+   variable is only read the first time an empty database is initialised, so you
+   can (and should) delete it from Vercel once the account exists.
 
 Notes:
 
