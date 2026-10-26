@@ -288,6 +288,39 @@ export function initializeDatabase(): Promise<void> {
   return initPromise
 }
 
+const isProductionRuntime = process.env.NODE_ENV === 'production'
+
+/**
+ * Local-development convenience passwords. Production never falls back to
+ * these: the first administrator must be created with an explicit
+ * `INITIAL_ADMIN_PASSWORD`, and the optional viewer with
+ * `INITIAL_VIEWER_PASSWORD`.
+ */
+const DEV_ADMIN_PASSWORD = 'Admin@12345'
+const DEV_VIEWER_PASSWORD = 'Viewer@12345'
+
+function readInitialPassword(envKey: string): string | null {
+  const value = process.env[envKey]
+  return value && value.trim() ? value : null
+}
+
+/** Rejects weak bootstrap passwords so a fresh deployment cannot be guessed. */
+function assertStrongPassword(envKey: string, password: string): string {
+  const strong =
+    password.length >= 12 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+
+  if (!strong) {
+    throw new Error(
+      `[security] ${envKey} must be at least 12 characters and include upper-case, lower-case, a number and a symbol.`,
+    )
+  }
+  return password
+}
+
 export async function seedBaseData() {
   const adminRoleId = 'role-admin'
   const viewerRoleId = 'role-viewer'
@@ -341,7 +374,21 @@ export async function seedBaseData() {
 
   const existingAdmin = await one<{ id: string }>(`SELECT id FROM users WHERE email = $1`, ['admin@alsheikh.eg'])
   if (!existingAdmin) {
-    const passwordHash = await hash('Admin@12345', 12)
+    const configuredAdminPassword = readInitialPassword('INITIAL_ADMIN_PASSWORD')
+
+    if (!configuredAdminPassword && isProductionRuntime) {
+      throw new Error(
+        '[security] INITIAL_ADMIN_PASSWORD must be set to create the first administrator during production first-run. ' +
+          'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(18).toString(\'base64url\'))"',
+      )
+    }
+
+    const adminPassword = configuredAdminPassword
+      ? isProductionRuntime
+        ? assertStrongPassword('INITIAL_ADMIN_PASSWORD', configuredAdminPassword)
+        : configuredAdminPassword
+      : DEV_ADMIN_PASSWORD
+    const passwordHash = await hash(adminPassword, 12)
     await db.query(
       `INSERT INTO users (id, email, password_hash, full_name, role_id, language, theme)
        VALUES ($1, $2, $3, $4, $5, 'en', 'dark')`,
@@ -349,14 +396,28 @@ export async function seedBaseData() {
     )
   }
 
+  // The read-only account is optional in production: only create it when an
+  // explicit password is supplied so deployments are not seeded with a known
+  // default credential. Local development keeps both demo accounts.
   const existingViewer = await one<{ id: string }>(`SELECT id FROM users WHERE email = $1`, ['viewer@alsheikh.eg'])
   if (!existingViewer) {
-    const passwordHash = await hash('Viewer@12345', 12)
-    await db.query(
-      `INSERT INTO users (id, email, password_hash, full_name, role_id, language, theme)
-       VALUES ($1, $2, $3, $4, $5, 'en', 'dark')`,
-      [randomUUID(), 'viewer@alsheikh.eg', passwordHash, 'Operations Viewer', viewerRoleId],
-    )
+    const configuredViewerPassword = readInitialPassword('INITIAL_VIEWER_PASSWORD')
+
+    if (!configuredViewerPassword && isProductionRuntime) {
+      // No viewer account on this deployment; the administrator can add one later.
+    } else {
+      const viewerPassword = configuredViewerPassword
+        ? isProductionRuntime
+          ? assertStrongPassword('INITIAL_VIEWER_PASSWORD', configuredViewerPassword)
+          : configuredViewerPassword
+        : DEV_VIEWER_PASSWORD
+      const passwordHash = await hash(viewerPassword, 12)
+      await db.query(
+        `INSERT INTO users (id, email, password_hash, full_name, role_id, language, theme)
+         VALUES ($1, $2, $3, $4, $5, 'en', 'dark')`,
+        [randomUUID(), 'viewer@alsheikh.eg', passwordHash, 'Operations Viewer', viewerRoleId],
+      )
+    }
   }
 
   await db.query(

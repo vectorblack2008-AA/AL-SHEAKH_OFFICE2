@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createApp } from '../server/app.js'
-import { initializeDatabase } from '../server/db.js'
+import { ensureRuntime } from '../server/bootstrap.js'
 
 /**
  * Vercel serverless entry point.
@@ -13,20 +13,8 @@ import { initializeDatabase } from '../server/db.js'
  */
 const app = createApp()
 
-let ready: Promise<void> | null = null
-
-function ensureReady(): Promise<void> {
-  if (!ready) {
-    ready = initializeDatabase().catch((error) => {
-      ready = null
-      throw error
-    })
-  }
-  return ready
-}
-
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  await ensureReady()
+  await ensureRuntime()
 
   // The rewrite in vercel.json forwards the original path as `__path` because a
   // serverless invocation does not always preserve the request URL. Rebuild the

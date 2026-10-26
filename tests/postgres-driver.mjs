@@ -28,6 +28,8 @@ const child = spawn('node', ['node_modules/tsx/dist/cli.mjs', 'server/index.ts']
     PORT: String(API_PORT),
     NODE_ENV: 'production',
     JWT_SECRET: 'postgres-driver-verification-secret-0123456789',
+    // Production first-run requires an explicit, strong bootstrap password.
+    INITIAL_ADMIN_PASSWORD: 'PostgresDriver@2026!',
     DATABASE_URL: `postgresql://postgres:postgres@127.0.0.1:${PORT}/postgres?sslmode=disable`,
     // The PGlite socket harness serialises connections; a real server does not.
     PGPOOL_MAX: '1',
@@ -60,7 +62,7 @@ try {
   const login = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@alsheikh.eg', password: 'Admin@12345' }),
+    body: JSON.stringify({ email: 'admin@alsheikh.eg', password: 'PostgresDriver@2026!' }),
   })
   console.log('login status:', login.status)
   if (login.status !== 200) throw new Error('Login failed on the pg driver')

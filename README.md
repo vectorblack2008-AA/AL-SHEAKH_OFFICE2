@@ -93,15 +93,20 @@ Egyptian demo data from **Settings → Demo → Load demo data** (admin only).
 
 ---
 
-## Default accounts
+## First-run accounts
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Administrator | `admin@alsheikh.eg` | `Admin@12345` |
-| Viewer (read-only) | `viewer@alsheikh.eg` | `Viewer@12345` |
+| Role | Email | Local development | Production |
+| --- | --- | --- | --- |
+| Administrator | `admin@alsheikh.eg` | `Admin@12345` | value of `INITIAL_ADMIN_PASSWORD` (required) |
+| Viewer (read-only) | `viewer@alsheikh.eg` | `Viewer@12345` | only created when `INITIAL_VIEWER_PASSWORD` is set |
 
-**Change these immediately after the first production login.** Demo credentials
-are only advertised when `NODE_ENV !== 'production'`.
+In production the API refuses to create the first administrator unless
+`INITIAL_ADMIN_PASSWORD` is set and strong (12+ characters, upper-case,
+lower-case, a number and a symbol). No demo password is ever used or advertised
+in production. Change the password after the first login from **Users**.
+
+Demo credentials are only shown on the login screen when
+`NODE_ENV !== 'production'`.
 
 ---
 
@@ -179,8 +184,17 @@ with a clear message when `DATABASE_URL` is missing on Vercel.
    | --- | --- |
    | `DATABASE_URL` | pooled PostgreSQL connection string |
    | `JWT_SECRET` | 48+ random bytes, hex encoded |
+   | `INITIAL_ADMIN_PASSWORD` | strong password for the first admin (required) |
    | `NODE_ENV` | `production` |
    | `SHOP_TIMEZONE` | `Africa/Cairo` (optional) |
+   | `INITIAL_VIEWER_PASSWORD` | optional read-only account password |
+
+   Generate secrets locally:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"   # JWT_SECRET
+   node -e "console.log(require('crypto').randomBytes(18).toString('base64url'))" # admin password
+   ```
 
 4. Deploy. `vercel.json` already configures:
    - the Vite build (`dist/`),
@@ -188,7 +202,9 @@ with a clear message when `DATABASE_URL` is missing on Vercel.
    - the schema file bundled with the function,
    - SPA fallback for client-side routes.
 
-5. Open the app and sign in with `admin@alsheikh.eg`, then change the password.
+5. Open the app and sign in as `admin@alsheikh.eg` with the password from
+   `INITIAL_ADMIN_PASSWORD`, then change it from **Users**. The environment
+   variable is only read the first time an empty database is initialised.
 
 Notes:
 
@@ -226,6 +242,11 @@ The server listens on `PORT`, serves the built SPA and shuts down gracefully on
   hardening headers.
 - Start from `.env.example`, never commit `.env`, and rotate `JWT_SECRET` after
   any suspected leak (this invalidates all sessions).
+- Production first-run has no default credentials: `INITIAL_ADMIN_PASSWORD` is
+  mandatory and strength-checked, and the viewer account is skipped unless
+  `INITIAL_VIEWER_PASSWORD` is provided. Keep both out of version control and
+  delete them from the hosting dashboard after the first successful login if
+  your platform allows it (existing accounts are never overwritten).
 
 ---
 
@@ -290,11 +311,15 @@ tests/                    Integration + smoke + optional PostgreSQL driver check
 ## نظرة سريعة بالعربية
 
 - **التشغيل محلياً:** `npm install` ثم `npm run dev`، وافتح `http://localhost:5173`.
-- **الحساب الافتراضي:** `admin@alsheikh.eg` / `Admin@12345` — غيّره فوراً بعد الرفع.
+- **الحساب محلياً:** `admin@alsheikh.eg` / `Admin@12345` للDevelopment فقط.
+- **الحساب عند الرفع:** يُنشأ بكلمة مرور `INITIAL_ADMIN_PASSWORD` (إلزامية وقوية).
+  لا توجد كلمة مرور افتراضية في الإنتاج، وحساب المشاهد يُنشأ فقط عند ضبط
+  `INITIAL_VIEWER_PASSWORD`.
 - **قاعدة البيانات محلياً:** مدمجة (PGlite) وتُحفظ في `./data/alsheikh` بدون أي إعداد.
 - **قاعدة البيانات عند الرفع:** PostgreSQL مستضافة (Neon أو Supabase) عبر `DATABASE_URL`.
   لا يمكن استخدام القاعدة المحلية على Vercel لأن ملفات الخادم مؤقتة.
-- **الرفع على Vercel:** اربط المستودع، أضف `DATABASE_URL` و`JWT_SECRET`، ثم Deploy.
+- **الرفع على Vercel:** اربط المستودع، أضف `DATABASE_URL` و`JWT_SECRET`
+  و`INITIAL_ADMIN_PASSWORD`، ثم Deploy.
 - **قبل الاستخدام الحقيقي:** غيّر كلمات المرور، راجع صلاحيات المشاهدين، واضبط نسخاً
   احتياطية دورية لقاعدة البيانات.
 
